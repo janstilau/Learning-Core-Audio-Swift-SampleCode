@@ -91,11 +91,11 @@ func MyGetDefaultInputDevicesSampleRate(_ outSampleRate: UnsafeMutablePointer<Fl
     // Refer to: https://developer.apple.com/library/archive/technotes/tn2223/_index.html
     // Refer to: https://stackoverflow.com/questions/37132958/audiohardwareservicegetpropertydata-deprecated
     error = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
-                                                &propertyAddress,
-                                                0,
-                                                nil,
-                                                &propertySize,
-                                                &deviceID)
+                                       &propertyAddress,
+                                       0,
+                                       nil,
+                                       &propertySize,
+                                       &deviceID)
     if (error != noErr) { return error }
     
     // get its sample rate
@@ -104,11 +104,11 @@ func MyGetDefaultInputDevicesSampleRate(_ outSampleRate: UnsafeMutablePointer<Fl
     propertyAddress.mElement = 0
     propertySize = MemoryLayout<Float64>.size.toUInt32()
     error = AudioObjectGetPropertyData(deviceID,
-                                                &propertyAddress,
-                                                0,
-                                                nil,
-                                                &propertySize,
-                                                outSampleRate)
+                                       &propertyAddress,
+                                       0,
+                                       nil,
+                                       &propertySize,
+                                       outSampleRate)
     
     return error
 }
@@ -133,9 +133,9 @@ func MyComputeRecordBufferSize(_ format: UnsafePointer<AudioStreamBasicDescripti
             // get the largest single packet size possible
             var propertySize: UInt32 = MemoryLayout.size(ofValue: maxPacketSize).toUInt32()
             CheckError(AudioQueueGetProperty(queue,
-                                  kAudioConverterPropertyMaximumOutputPacketSize,
-                                  &maxPacketSize,
-                                  &propertySize), "couldn't get queue's maximum output packet size")
+                                             kAudioConverterPropertyMaximumOutputPacketSize,
+                                             &maxPacketSize,
+                                             &propertySize), "couldn't get queue's maximum output packet size")
         }
         
         if (format~>.mFramesPerPacket > 0) {
@@ -170,15 +170,15 @@ func MyCopyEncoderCookieToFile(_ queue: AudioQueueRef, _ theFile: AudioFileID) -
         let magicCookie = UnsafeMutablePointer<UInt8>.allocate(capacity: propertySize.toInt())
         magicCookie.initialize(repeating: 0, count: propertySize.toInt())
         CheckError(AudioQueueGetProperty(queue,
-                              kAudioQueueProperty_MagicCookie,
-                              magicCookie,
-                              &propertySize), "get audio queue's magic cookie")
+                                         kAudioQueueProperty_MagicCookie,
+                                         magicCookie,
+                                         &propertySize), "get audio queue's magic cookie")
         
         // now set the magic cookie on the output file
         CheckError(AudioFileSetProperty(theFile,
-                             kAudioFilePropertyMagicCookieData,
-                             propertySize,
-                             magicCookie), "set audio file's magic cookie")
+                                        kAudioFilePropertyMagicCookieData,
+                                        propertySize,
+                                        magicCookie), "set audio file's magic cookie")
         magicCookie.deinitialize(count: propertySize.toInt())
         magicCookie.deallocate()
     }
@@ -188,12 +188,12 @@ func MyCopyEncoderCookieToFile(_ queue: AudioQueueRef, _ theFile: AudioFileID) -
 
 // Audio Queue callback function, called when an input buffer has been filled
 let MyAQInputCallback: AudioQueueInputCallback = {
-(inUserData: UnsafeMutableRawPointer?,
-    inAQ: AudioQueueRef,
-    inBuffer: AudioQueueBufferRef,
-    inStartTime: UnsafePointer<AudioTimeStamp>,
-    inNumberPacketDescriptions: UInt32,
-    inPacketDescs: UnsafePointer<AudioStreamPacketDescription>?) in
+    (inUserData: UnsafeMutableRawPointer?,
+     inAQ: AudioQueueRef,
+     inBuffer: AudioQueueBufferRef,
+     inStartTime: UnsafePointer<AudioTimeStamp>,
+     inNumberPacketDescriptions: UInt32,
+     inPacketDescs: UnsafePointer<AudioStreamPacketDescription>?) in
     
     var recorderRef = inUserData?.bindMemory(to: MyRecorder.self, capacity: 1)
     guard let recorder = recorderRef else { return }
@@ -202,12 +202,12 @@ let MyAQInputCallback: AudioQueueInputCallback = {
     if (inNumPackets > 0) {
         //  write packets to file
         CheckError(AudioFileWritePackets(recorder~>.recordFile!,
-                              false,
-                              inBuffer~>.mAudioDataByteSize,
-                              inPacketDescs,
-                              recorder~>.recordPacket,
-                              &inNumPackets,
-                              inBuffer~>.mAudioData), "AudioFileWritePackets failed")
+                                         false,
+                                         inBuffer~>.mAudioDataByteSize,
+                                         inPacketDescs,
+                                         recorder~>.recordPacket,
+                                         &inNumPackets,
+                                         inBuffer~>.mAudioData), "AudioFileWritePackets failed")
         
         // increment packet index
         recorder~>.recordPacket += inNumPackets.toInt64()
@@ -216,9 +216,9 @@ let MyAQInputCallback: AudioQueueInputCallback = {
     // if we're not stopping, re-enqueue the buffer so that it gets filled again
     if (recorder~>.running) {
         CheckError(AudioQueueEnqueueBuffer(inAQ,
-                                inBuffer,
-                                0,
-                                nil), "AudioQueueEnqueueBuffer failed")
+                                           inBuffer,
+                                           0,
+                                           nil), "AudioQueueEnqueueBuffer failed")
     }
 }
 
@@ -242,20 +242,20 @@ func main() -> Void
     //                 given the information known about the format
     var propSize = MemoryLayout.size(ofValue: recordFormat).toUInt32()
     CheckError(AudioFormatGetProperty(kAudioFormatProperty_FormatInfo,
-                           0,
-                           nil,
-                           &propSize,
-                           &recordFormat), "AudioFormatGetProperty failed")
+                                      0,
+                                      nil,
+                                      &propSize,
+                                      &recordFormat), "AudioFormatGetProperty failed")
     
     // create a input (recording) queue
     var queue_: AudioQueueRef?
     CheckError(AudioQueueNewInput(&recordFormat,
-                       MyAQInputCallback,
-                       &recorder,
-                       nil,
-                       nil,
-                       0,
-                       &queue_), "AudioQueueNewInput failed")
+                                  MyAQInputCallback,
+                                  &recorder,
+                                  nil,
+                                  nil,
+                                  0,
+                                  &queue_), "AudioQueueNewInput failed")
     
     guard let queue = queue_ else { exit(1) }
     
@@ -267,16 +267,16 @@ func main() -> Void
     // codec is instantiated (in this case, by the AudioQueue's Audio Converter object)
     var size = MemoryLayout.size(ofValue: recordFormat).toUInt32()
     CheckError(AudioQueueGetProperty(queue,
-                          kAudioConverterCurrentOutputStreamDescription,
-                          &recordFormat,
-                          &size), "couldn't get queue's format")
+                                     kAudioConverterCurrentOutputStreamDescription,
+                                     &recordFormat,
+                                     &size), "couldn't get queue's format")
     
     let myFileURL = URL(fileURLWithPath: "output.caf")
     CheckError(AudioFileCreateWithURL(myFileURL as CFURL,
-                           kAudioFileCAFType,
-                           &recordFormat,
-                           AudioFileFlags.eraseFile,
-                           &recorder.recordFile), "AudioFileCreateWithURL failed")
+                                      kAudioFileCAFType,
+                                      &recordFormat,
+                                      AudioFileFlags.eraseFile,
+                                      &recorder.recordFile), "AudioFileCreateWithURL failed")
     
     // many encoded formats require a 'magic cookie'. we set the cookie first
     // to give the file object as much info as we can about the data it will be receiving
@@ -287,12 +287,12 @@ func main() -> Void
     for _ in 0..<kNumberRecordBuffers {
         var buffer: AudioQueueBufferRef?
         CheckError(AudioQueueAllocateBuffer(queue,
-                                 bufferBytesSize,
-                                 &buffer), "AudioQueueAllocateBuffer failed")
+                                            bufferBytesSize,
+                                            &buffer), "AudioQueueAllocateBuffer failed")
         CheckError(AudioQueueEnqueueBuffer(queue,
-                                buffer!,
-                                0,
-                                nil), "AudioQueueEnqueueBuffer failed")
+                                           buffer!,
+                                           0,
+                                           nil), "AudioQueueEnqueueBuffer failed")
     }
     
     // start the queue. this function return immedatly and begins
