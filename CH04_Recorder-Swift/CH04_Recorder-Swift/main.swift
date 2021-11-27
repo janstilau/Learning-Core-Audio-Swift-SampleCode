@@ -11,10 +11,31 @@ import AudioToolbox
 
 private let kNumberRecordBuffers = 3
 
+
+// 一个自定义的操作符, 取得指针的指向的对象.
+postfix operator ~>
+extension UnsafePointer where Pointee == AudioStreamBasicDescription {
+    static postfix func ~> (pointer: UnsafePointer<AudioStreamBasicDescription>) -> AudioStreamBasicDescription {
+        return pointer.pointee
+    }
+}
+
+extension UnsafeMutablePointer where Pointee == MyRecorder {
+    static postfix func ~> (pointer: UnsafeMutablePointer<MyRecorder>) -> MyRecorder {
+        return pointer.pointee
+    }
+}
+
+extension UnsafeMutablePointer where Pointee == AudioQueueBuffer {
+    static postfix func ~> (pointer: UnsafeMutablePointer<AudioQueueBuffer>) -> AudioQueueBuffer {
+        return pointer.pointee
+    }
+}
+
 class MyRecorder
 {
-    var recordFile: AudioFileID?
-    var recordPacket: Int64 = 0
+    var recordFile: AudioFileID? // 文件的输出位置.
+    var recordPacket: Int64 = 0 // 记录已经存储过的 Packet 的数量.
     var running: Bool = false
 }
 
@@ -57,24 +78,6 @@ extension Double {
     }
 }
 
-postfix operator ~>
-extension UnsafePointer where Pointee == AudioStreamBasicDescription {
-    static postfix func ~> (pointer: UnsafePointer<AudioStreamBasicDescription>) -> AudioStreamBasicDescription {
-        return pointer.pointee
-    }
-}
-
-extension UnsafeMutablePointer where Pointee == MyRecorder {
-    static postfix func ~> (pointer: UnsafeMutablePointer<MyRecorder>) -> MyRecorder {
-        return pointer.pointee
-    }
-}
-
-extension UnsafeMutablePointer where Pointee == AudioQueueBuffer {
-    static postfix func ~> (pointer: UnsafeMutablePointer<AudioQueueBuffer>) -> AudioQueueBuffer {
-        return pointer.pointee
-    }
-}
 
 // MARK: - Utility Functions
 
@@ -103,6 +106,7 @@ func MyGetDefaultInputDevicesSampleRate(_ outSampleRate: UnsafeMutablePointer<Fl
     propertyAddress.mScope = kAudioObjectPropertyScopeGlobal
     propertyAddress.mElement = 0
     propertySize = MemoryLayout<Float64>.size.toUInt32()
+    // 在这里, 将采样率才进行的赋值 .
     error = AudioObjectGetPropertyData(deviceID,
                                        &propertyAddress,
                                        0,
@@ -201,6 +205,9 @@ let MyAQInputCallback: AudioQueueInputCallback = {
     
     if (inNumPackets > 0) {
         //  write packets to file
+        /*
+            在 AudioFileWritePackets 里面, 需要用到 recorder~>.recordPacket, 已经存储的 Packet 的数量.
+         */
         CheckError(AudioFileWritePackets(recorder~>.recordFile!,
                                          false,
                                          inBuffer~>.mAudioDataByteSize,
@@ -228,11 +235,15 @@ func main() -> Void
     var recordFormat = AudioStreamBasicDescription()
     
     // Configure the output data format to be AAC
-    recordFormat.mFormatID = kAudioFormatMPEG4AAC
-    recordFormat.mChannelsPerFrame = 2
+    recordFormat.mFormatID = kAudioFormatMPEG4AAC // 输出的格式. 在 QudioQueue 里面, 会有着音频文件的转码的工作.
+    recordFormat.mChannelsPerFrame = 2 // 双声道
     
     // get the sample rate of the default input device
     // we use this to adapt the output data format to match hardware capabilities
+    // MacPro 的到的这个值, 是 44100 .
+    /*
+        在业务代码里面, 这个值是业务方自己写的. 在 ASR Speech Recorder 里面, 这个值是 16000.
+     */
     _ = MyGetDefaultInputDevicesSampleRate(&recordFormat.mSampleRate)
     
     // ProTip: Use the AudioFormat API to trivialize ASBD creation.
@@ -247,11 +258,13 @@ func main() -> Void
                                       &propSize,
                                       &recordFormat), "AudioFormatGetProperty failed")
     
-    // create a input (recording) queue
+    /*
+        在这, 进行了真正的录音的开启的过程.
+     */
     var queue_: AudioQueueRef?
     CheckError(AudioQueueNewInput(&recordFormat,
                                   MyAQInputCallback,
-                                  &recorder,
+                                  &recorder, // 这个就是, 传入到 MyAQInputCallback 中的第一个参数.
                                   nil,
                                   nil,
                                   0,
@@ -265,12 +278,15 @@ func main() -> Void
     //
     // for example: certain fields in an ASBD cannot possibly be known until it's
     // codec is instantiated (in this case, by the AudioQueue's Audio Converter object)
+    // 只有, 当 Queue 真正建立之后, RecordFormat 的某些值才可能真正的完成填充.
     var size = MemoryLayout.size(ofValue: recordFormat).toUInt32()
     CheckError(AudioQueueGetProperty(queue,
                                      kAudioConverterCurrentOutputStreamDescription,
                                      &recordFormat,
                                      &size), "couldn't get queue's format")
+    // 在 Queue 创建之后, 获取 recordFormat 的值, 才是最准确地.
     
+    // 创建一个 AudioFile 对象, 将这个对象的句柄, 传递给 recorder.recordFile
     let myFileURL = URL(fileURLWithPath: "output.caf")
     CheckError(AudioFileCreateWithURL(myFileURL as CFURL,
                                       kAudioFileCAFType,
@@ -283,6 +299,9 @@ func main() -> Void
     MyCopyEncoderCookieToFile(queue, recorder.recordFile!)
     
     // allocate and enqueue buffers
+    /*
+        向 AudioQueue 里面, 添加录音所需要的 Buffer 对象.
+     */
     let bufferBytesSize = MyComputeRecordBufferSize(&recordFormat, queue, 0.5)
     for _ in 0..<kNumberRecordBuffers {
         var buffer: AudioQueueBufferRef?
@@ -298,21 +317,25 @@ func main() -> Void
     // start the queue. this function return immedatly and begins
     // invoking the callback, as needed, asynchronously.
     recorder.running = true;
+    // 真正的开启录音.
     CheckError(AudioQueueStart(queue, nil), "AudioQueueStart failed")
     
     // and wait
+    // 使用, getChar 的线程阻塞, 保住主线程的命.
     debugPrint("Recording, press <return> to stop: ")
     getchar();
     
     // end recording
     debugPrint("* recording done *")
     recorder.running = false
+    // 主线程中, 调用 AudioQueueStop 结束录音.
     CheckError(AudioQueueStop(queue, true), "AudioQueueStop failed")
     
     // a codec may update its magic cookie at the end of an encoding session
     // so reapply it to the file now
     MyCopyEncoderCookieToFile(queue, recorder.recordFile!)
     
+    // 释放录音相关的资源, 关闭文件.
     AudioQueueDispose(queue, true)
     AudioFileClose(recorder.recordFile!)
 }
