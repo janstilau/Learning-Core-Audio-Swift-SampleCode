@@ -11,7 +11,6 @@ import AudioToolbox
 
 private let kNumberRecordBuffers = 3
 
-
 // 一个自定义的操作符, 取得指针的指向的对象.
 postfix operator ~>
 extension UnsafePointer where Pointee == AudioStreamBasicDescription {
@@ -206,7 +205,7 @@ let MyAQInputCallback: AudioQueueInputCallback = {
     if (inNumPackets > 0) {
         //  write packets to file
         /*
-            在 AudioFileWritePackets 里面, 需要用到 recorder~>.recordPacket, 已经存储的 Packet 的数量.
+         在 AudioFileWritePackets 里面, 需要用到 recorder~>.recordPacket, 已经存储的 Packet 的数量.
          */
         CheckError(AudioFileWritePackets(recorder~>.recordFile!,
                                          false,
@@ -234,15 +233,13 @@ func main() -> Void
     var recorder = MyRecorder()
     var recordFormat = AudioStreamBasicDescription()
     
-    // Configure the output data format to be AAC
     recordFormat.mFormatID = kAudioFormatMPEG4AAC // 输出的格式. 在 QudioQueue 里面, 会有着音频文件的转码的工作.
     recordFormat.mChannelsPerFrame = 2 // 双声道
-    
     // get the sample rate of the default input device
     // we use this to adapt the output data format to match hardware capabilities
     // MacPro 的到的这个值, 是 44100 .
     /*
-        在业务代码里面, 这个值是业务方自己写的. 在 ASR Speech Recorder 里面, 这个值是 16000.
+     在业务代码里面, 这个值是业务方自己写的. 在 ASR Speech Recorder 里面, 这个值是 16000.
      */
     _ = MyGetDefaultInputDevicesSampleRate(&recordFormat.mSampleRate)
     
@@ -259,7 +256,7 @@ func main() -> Void
                                       &recordFormat), "AudioFormatGetProperty failed")
     
     /*
-        在这, 进行了真正的录音的开启的过程.
+     在这, 进行了真正的录音的开启的过程.
      */
     var queue_: AudioQueueRef?
     CheckError(AudioQueueNewInput(&recordFormat,
@@ -300,7 +297,7 @@ func main() -> Void
     
     // allocate and enqueue buffers
     /*
-        向 AudioQueue 里面, 添加录音所需要的 Buffer 对象.
+     向 AudioQueue 里面, 添加录音所需要的 Buffer 对象.
      */
     let bufferBytesSize = MyComputeRecordBufferSize(&recordFormat, queue, 0.5)
     for _ in 0..<kNumberRecordBuffers {

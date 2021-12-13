@@ -9,7 +9,7 @@
 import Foundation
 import AudioToolbox
 
-private let kPlaybackFileLocation = "/Users/derekli/bitbucket/shape_of_you.mp3"
+private let kPlaybackFileLocation = "/Users/liugq01/Learning-Core-Audio-Swift-SampleCode/CH05_Player-Swift/CH05_Player-Swift/imported.mp3"
 
 private let kNumberPlaybackBuffers = 3
 
@@ -70,19 +70,19 @@ func MyCopyEncoderCookieToQueue(theFile: AudioFileID, queue: AudioQueueRef)
         let alignment = MemoryLayout<UInt8>.alignment
         var magicCookie: UnsafeMutableRawPointer = UnsafeMutableRawPointer.allocate(byteCount: Int(propertySize), alignment: alignment)
         CheckError(AudioFileGetProperty(theFile,
-                             kAudioFilePropertyMagicCookieData,
-                             &propertySize,
-                             &magicCookie), "get cookie from file failed")
+                                        kAudioFilePropertyMagicCookieData,
+                                        &propertySize,
+                                        &magicCookie), "get cookie from file failed")
         CheckError(AudioQueueSetProperty(queue,
-                              kAudioQueueProperty_MagicCookie,
-                              magicCookie,
-                              propertySize), "set cookie on queue failed")
+                                         kAudioQueueProperty_MagicCookie,
+                                         magicCookie,
+                                         propertySize), "set cookie on queue failed")
         magicCookie.deallocate()
     }
 }
 
 let MyAQOutputCallback: AudioQueueOutputCallback = { (inUserData, inAQ, inCompleteAQBuffer) in
-
+    
     let aqp_: MyPlayer? = inUserData?.bindMemory(to: MyPlayer.self, capacity: 1).pointee
     guard var aqp = aqp_ , let playbackFile = aqp.playbackFile else { return }
     if (true == aqp.isDone) { return }
@@ -92,22 +92,22 @@ let MyAQOutputCallback: AudioQueueOutputCallback = { (inUserData, inAQ, inComple
     
     var nPackets: UInt32 = aqp.numPacketsToRead
     CheckError(AudioFileReadPacketData(playbackFile,
-                            false,
-                            &numBytes,
-                            aqp.packetDescs,
-                            aqp.packetPosition,
-                            &nPackets,
-                            inCompleteAQBuffer.pointee.mAudioData), "AudioFileReadPackets failed")
+                                       false,
+                                       &numBytes,
+                                       aqp.packetDescs,
+                                       aqp.packetPosition,
+                                       &nPackets,
+                                       inCompleteAQBuffer.pointee.mAudioData), "AudioFileReadPackets failed")
     
     // enqueue buffer into the Audio Queue
     // if nPackets == 0 , it means we are EOF (all data has been read from file)
     if (nPackets > 0) {
         inCompleteAQBuffer.pointee.mAudioDataByteSize = numBytes
         CheckError(AudioQueueEnqueueBuffer(inAQ,
-                                inCompleteAQBuffer,
-                                (aqp.packetDescs != nil) ? nPackets : 0,
-                                aqp.packetDescs), "AudioQueueEnqueueBuffer failed")
-
+                                           inCompleteAQBuffer,
+                                           (aqp.packetDescs != nil) ? nPackets : 0,
+                                           aqp.packetDescs), "AudioQueueEnqueueBuffer failed")
+        
         aqp.packetPosition += Int64(nPackets)
         debugPrint("packetPosition: \(aqp.packetPosition)")
     }
@@ -121,14 +121,14 @@ let MyAQOutputCallback: AudioQueueOutputCallback = { (inUserData, inAQ, inComple
 func main() -> Void
 {
     var player = MyPlayer()
-
+    
     let myFileURL = URL(fileURLWithPath: kPlaybackFileLocation)
     
     // open the audio file
     CheckError(AudioFileOpenURL(myFileURL as CFURL,
-                     AudioFilePermissions.readPermission,
-                     0,
-                     &player.playbackFile), "AudioFileOpenURL failed")
+                                AudioFilePermissions.readPermission,
+                                0,
+                                &player.playbackFile), "AudioFileOpenURL failed")
     
     guard let playbackFile = player.playbackFile else { return }
     
@@ -136,20 +136,20 @@ func main() -> Void
     var dataFormat = AudioStreamBasicDescription()
     var propSize: UInt32 = UInt32(MemoryLayout.size(ofValue: dataFormat))
     CheckError(AudioFileGetProperty(playbackFile,
-                         kAudioFilePropertyDataFormat,
-                         &propSize,
-                         &dataFormat), "couldn't get file's data format")
+                                    kAudioFilePropertyDataFormat,
+                                    &propSize,
+                                    &dataFormat), "couldn't get file's data format")
     
     // create a output (playback) queue
     var queueRef: AudioQueueRef?
     CheckError(AudioQueueNewOutput(&dataFormat,
-                        MyAQOutputCallback,
-                        &player, // user data
-                        nil, // run loop
-                        nil, // run loop mode
-                        0, // flags (always 0)
-                        &queueRef), // output: reference to AudioQueue object
-                        "AudioQueueNewOutput failed")
+                                   MyAQOutputCallback,
+                                   &player, // user data
+                                   nil, // run loop
+                                   nil, // run loop mode
+                                   0, // flags (always 0)
+                                   &queueRef), // output: reference to AudioQueue object
+               "AudioQueueNewOutput failed")
     
     // adjust buffer size to represent about a half second
     var bufferByteSize: UInt32 = 0
@@ -159,7 +159,7 @@ func main() -> Void
                           outBufferSize: &bufferByteSize,
                           outNumPackets: &player.numPacketsToRead)
     
-    // check if we are dealing with a VBR file. ASBD for VBR files always have 
+    // check if we are dealing with a VBR file. ASBD for VBR files always have
     // mBytesPerPacket and mFramesPerPacket as 0 since they can fluctuate at any time
     // if we are dealing with VBR file, we allocate memory t ohold the packet descriptions
     let isFormatVBR = (dataFormat.mBytesPerPacket == 0 || dataFormat.mFramesPerPacket == 0)
@@ -198,14 +198,14 @@ func main() -> Void
     
     // start the queue. This function retruns immediately and begins
     CheckError(AudioQueueStart(queue, nil), "AudioQueueStart failed")
-        
+    
     // wait
     debugPrint("Playing...")
     repeat {
         CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0.25, false)
     } while (player.isDone == false)
     
-    // isDone represents the state of the Audio File enqueuing. This does not mean the 
+    // isDone represents the state of the Audio File enqueuing. This does not mean the
     // Audio Queue is actually done playing yet. Since we have 3 half-second buffers in-flight
     // run for continue to run for a short addtional time so they can be processed
     CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 2, false)
